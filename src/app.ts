@@ -1,24 +1,25 @@
-import express, { Request, Response, NextFunction } from 'express';
-import { HttpError } from './errors/httpError';
+import express, { Request, Response } from 'express';
+import { errorHandler, notFoundHandler } from './errors/handlers';
+import { authRouter } from './routes/auth';
+import { proxyRouter } from './routes/proxy';
 
 const app = express();
 
 app.use(express.json());
 
 app.get('/health', (req: Request, res: Response) => {
-  res.status(200).json({ status: 'ok', service: 'api-gateway' });
+  res.status(200).json({ status: 'ok' });
 });
 
-// TODO: mount this service's routes here once implemented.
+// Auth routes are mounted before any token gate: /auth/login never requires a
+// token and /auth/register only validates an Authorization header when present.
+app.use('/auth', authRouter);
 
-app.use((req: Request, res: Response) => {
-  res.status(404).json({ error: 'Not Found' });
-});
+// Proxied routes: each mounted prefix requires a valid, unexpired bearer token
+// before anything is forwarded to a backing service.
+app.use(proxyRouter);
 
-// eslint-disable-next-line no-unused-vars
-app.use((err: Error, req: Request, res: Response, next: NextFunction) => {
-  const status = err instanceof HttpError ? err.status : 500;
-  res.status(status).json({ error: err.message || 'Internal Server Error' });
-});
+app.use(notFoundHandler);
+app.use(errorHandler);
 
 export default app;
